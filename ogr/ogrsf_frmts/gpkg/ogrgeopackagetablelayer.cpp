@@ -2933,6 +2933,7 @@ OGRFeature *OGRGeoPackageTableLayer::GetFeature(GIntBig nFID)
                      "WHERE \"%s\" = ?",
                      m_soColumns.c_str(), SQLEscapeName(m_pszTableName).c_str(),
                      SQLEscapeName(m_pszFidColumn).c_str());
+        fprintf(stderr, "prepare stmt: %s\n", soSQL.c_str());
 
         const int err = sqlite3_prepare_v2(m_poDS->GetDB(), soSQL.c_str(), -1,
                                            &m_poGetFeatureStatement, nullptr);
@@ -2945,6 +2946,7 @@ OGRFeature *OGRGeoPackageTableLayer::GetFeature(GIntBig nFID)
     }
 
     CPL_IGNORE_RET_VAL(sqlite3_bind_int64(m_poGetFeatureStatement, 1, nFID));
+    fprintf(stderr, "query for %lld\n", nFID);
 
     /* Should be only one or zero results */
     const int err = sqlite3_step(m_poGetFeatureStatement);
@@ -2952,6 +2954,27 @@ OGRFeature *OGRGeoPackageTableLayer::GetFeature(GIntBig nFID)
     /* Aha, got one */
     if (err == SQLITE_ROW)
     {
+        int cols = sqlite3_column_count(m_poGetFeatureStatement);
+        for (int i = 0; i < cols; i++) {
+            size_t type = sqlite3_column_type(m_poGetFeatureStatement, i);
+
+            if (type == SQLITE_INTEGER) {
+                fprintf(stderr, "%d: int %lld\n", i, sqlite3_column_int64(m_poGetFeatureStatement, i));
+            } else if (type == SQLITE_FLOAT) {
+                fprintf(stderr, "%d: float %f\n", i, sqlite3_column_double(m_poGetFeatureStatement, i));
+            } else if (type == SQLITE_TEXT) {
+                fprintf(stderr, "%d: text %s\n", i, sqlite3_column_text(m_poGetFeatureStatement, i));
+            } else if (type == SQLITE_NULL) {
+                fprintf(stderr, "%d: null\n", i);
+            } else if (type == SQLITE_BLOB) {
+                // const char *cp = (const char *) sqlite3_column_blob(m_poGetFeatureStatement, i);
+                size_t len = sqlite3_column_bytes(m_poGetFeatureStatement, i);
+                fprintf(stderr, "%d: blob %zu bytes\n", i, len);
+            } else {
+                fprintf(stderr, "%d: unknown type %zu\n", i, type);
+            }
+        }
+
         OGRFeature *poFeature = TranslateFeature(m_poGetFeatureStatement);
         if (m_iFIDAsRegularColumnIndex >= 0)
         {
